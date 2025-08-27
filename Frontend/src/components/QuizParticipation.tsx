@@ -103,10 +103,9 @@ export function QuizParticipation({ onBack, currentUser }: QuizParticipationProp
     setLoading(true);
     try {
       // Prepare answers for submission
-      const submissionAnswers = answers.map((answer, index) => ({
+      const submissionAnswers = answers.map((answer) => ({
         questionId: answer.questionId,
-        selectedAnswer: currentQuiz.questions[index].options[answer.selectedAnswer],
-        correctAnswer: currentQuiz.questions[index].correctAnswer,
+        selectedAnswer: answer.selectedAnswer,
         isCorrect: answer.isCorrect
       }));
 
