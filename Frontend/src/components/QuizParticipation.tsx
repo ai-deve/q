@@ -1,17 +1,23 @@
 import React, { useState } from 'react';
-import { Play, ArrowRight, CheckCircle, XCircle } from 'lucide-react';
-import { Quiz, Question, QuizResult } from '../types/quiz';
+import { Play, ArrowRight, CheckCircle, XCircle, Trophy, Target, TrendingUp } from 'lucide-react';
+import { Quiz, Question, QuizResult, QuizAnswer } from '../types/quiz';
 
 interface QuizParticipationProps {
   onBack: () => void;
+  currentUser?: {
+    id: string;
+    name: string;
+    email: string;
+  };
 }
 
-export function QuizParticipation({ onBack }: QuizParticipationProps) {
+export function QuizParticipation({ onBack, currentUser }: QuizParticipationProps) {
   const [quizCode, setQuizCode] = useState('');
   const [currentQuiz, setCurrentQuiz] = useState<Quiz | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const [quizResults, setQuizResults] = useState<QuizResult[]>([]);
+  const [quizAnswers, setQuizAnswers] = useState<QuizAnswer[]>([]);
+  const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -46,41 +52,112 @@ export function QuizParticipation({ onBack }: QuizParticipationProps) {
     setSelectedAnswer(index);
   };
 
-  const handleNextQuestion = () => {
+  const handleNextQuestion = async () => {
     if (selectedAnswer === null || !currentQuiz) return;
 
     const currentQuestion = currentQuiz.questions[currentQuestionIndex];
     const isCorrect = selectedAnswer === ['A', 'B', 'C', 'D'].indexOf(currentQuestion.correctAnswer);
 
-    // Save result
-    const result: QuizResult = {
+    // Save answer
+    const answer: QuizAnswer = {
       questionId: currentQuestion.id,
       selectedAnswer: selectedAnswer,
       isCorrect: isCorrect
     };
 
-    setQuizResults([...quizResults, result]);
+    const updatedAnswers = [...quizAnswers, answer];
+    setQuizAnswers(updatedAnswers);
 
     // Move to next question or complete quiz
     if (currentQuestionIndex < currentQuiz.questions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
       setSelectedAnswer(null);
     } else {
-      setQuizCompleted(true);
+      // Submit quiz results
+      await submitQuizResults(updatedAnswers);
     }
   };
 
-  const calculateScore = () => {
-    return quizResults.filter(result => result.isCorrect).length;
+  const submitQuizResults = async (answers: QuizAnswer[]) => {
+    if (!currentQuiz || !currentUser) return;
+
+    setLoading(true);
+    try {
+      // Prepare answers for submission
+      const submissionAnswers = answers.map((answer, index) => ({
+        questionId: answer.questionId,
+        selectedAnswer: currentQuiz.questions[index].options[answer.selectedAnswer],
+        correctAnswer: currentQuiz.questions[index].correctAnswer,
+        isCorrect: answer.isCorrect
+      }));
+
+      const response = await fetch('http://localhost:3001/api/quiz/submit-result', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          quizId: currentQuiz.id,
+          userId: currentUser.id,
+          userName: currentUser.name,
+          userEmail: currentUser.email,
+          answers: submissionAnswers,
+          quizTitle: currentQuiz.title
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setQuizResult(data.result);
+        setQuizCompleted(true);
+      } else {
+        setError('Failed to submit quiz results');
+      }
+    } catch (error) {
+      console.error('Error submitting quiz results:', error);
+      setError('Failed to submit quiz results');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetQuiz = () => {
     setCurrentQuiz(null);
     setCurrentQuestionIndex(0);
     setSelectedAnswer(null);
-    setQuizResults([]);
+    setQuizAnswers([]);
+    setQuizResult(null);
     setQuizCompleted(false);
     setQuizCode('');
+    setError('');
+  };
+
+  const getPerformanceColor = (level: string) => {
+    switch (level) {
+      case 'excellent': return 'text-green-600 bg-green-100';
+      case 'good': return 'text-blue-600 bg-blue-100';
+      case 'poor': return 'text-red-600 bg-red-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getPerformanceIcon = (level: string) => {
+    switch (level) {
+      case 'excellent': return <Trophy className="w-6 h-6" />;
+      case 'good': return <Target className="w-6 h-6" />;
+      case 'poor': return <TrendingUp className="w-6 h-6" />;
+      default: return <Target className="w-6 h-6" />;
+    }
+  };
+
+  const getPerformanceMessage = (level: string, percentage: number) => {
+    switch (level) {
+      case 'excellent': return `Outstanding performance! You scored ${percentage}% - Keep up the excellent work!`;
+      case 'good': return `Good job! You scored ${percentage}% - You're on the right track!`;
+      case 'poor': return `You scored ${percentage}%. Don't worry, practice makes perfect!`;
+      default: return `You scored ${percentage}%`;
+    }
   };
 
   if (!currentQuiz) {
@@ -130,52 +207,94 @@ export function QuizParticipation({ onBack }: QuizParticipationProps) {
     );
   }
 
-  if (quizCompleted) {
-    const score = calculateScore();
-    const totalQuestions = currentQuiz.questions.length;
-    const percentage = Math.round((score / totalQuestions) * 100);
-
+  if (quizCompleted && quizResult) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 flex items-center justify-center">
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-white/20 w-full max-w-md">
-          <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">
-            Quiz Completed!
-          </h2>
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 flex items-center justify-center p-4">
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-white/20 w-full max-w-4xl">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className={`inline-flex items-center gap-3 px-6 py-3 rounded-full ${getPerformanceColor(quizResult.performanceLevel)} mb-4`}>
+              {getPerformanceIcon(quizResult.performanceLevel)}
+              <span className="font-bold text-lg capitalize">{quizResult.performanceLevel} Performance!</span>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-800 mb-2">Quiz Completed!</h2>
+            <p className="text-gray-600 text-lg">{quizResult.quizTitle}</p>
+          </div>
 
-          <div className="text-center mb-6">
-            <div className="text-4xl font-bold text-gray-800 mb-2">
-              {score} / {totalQuestions}
+          {/* Score Overview */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl p-6 text-center">
+              <div className="text-3xl font-bold mb-2">{quizResult.score}</div>
+              <div className="text-blue-100">Correct Answers</div>
             </div>
-            <div className="text-2xl font-semibold text-blue-600 mb-4">
-              {percentage}%
+            <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl p-6 text-center">
+              <div className="text-3xl font-bold mb-2">{quizResult.percentage}%</div>
+              <div className="text-purple-100">Overall Score</div>
             </div>
-            <div className="text-gray-600">
-              {percentage >= 80 ? 'Excellent!' : 
-               percentage >= 60 ? 'Good job!' : 
-               percentage >= 40 ? 'Not bad!' : 'Keep practicing!'}
+            <div className="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl p-6 text-center">
+              <div className="text-3xl font-bold mb-2">{quizResult.totalQuestions}</div>
+              <div className="text-green-100">Total Questions</div>
             </div>
           </div>
 
-          <div className="space-y-4">
-            {currentQuiz.questions.map((question, index) => {
-              const result = quizResults[index];
-              return (
-                <div key={question.id} className="p-4 border rounded-lg">
-                  <p className="font-semibold mb-2">{question.question}</p>
-                  <p className={`text-sm ${result?.isCorrect ? 'text-green-600' : 'text-red-600'}`}>
-                    {result?.isCorrect ? '✓ Correct' : '✗ Incorrect'}
-                  </p>
-                </div>
-              );
-            })}
+          {/* Performance Message */}
+          <div className="bg-white/60 rounded-xl p-6 mb-8 text-center">
+            <p className="text-lg text-gray-700">
+              {getPerformanceMessage(quizResult.performanceLevel, quizResult.percentage)}
+            </p>
           </div>
 
-          <button
-            onClick={resetQuiz}
-            className="w-full mt-6 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
-          >
-            Take Another Quiz
-          </button>
+          {/* Detailed Results */}
+          <div className="bg-white/60 rounded-xl p-6 mb-8">
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">Question Review</h3>
+            <div className="space-y-4 max-h-96 overflow-y-auto">
+              {quizResult.answers.map((answer, index) => {
+                const question = currentQuiz.questions[index];
+                return (
+                  <div key={answer.questionId} className={`p-4 rounded-lg border-l-4 ${
+                    answer.isCorrect ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'
+                  }`}>
+                    <div className="flex items-start justify-between mb-2">
+                      <p className="font-semibold text-gray-800 flex-1">
+                        {index + 1}. {question.question}
+                      </p>
+                      {answer.isCorrect ? (
+                        <CheckCircle className="w-6 h-6 text-green-600 ml-2" />
+                      ) : (
+                        <XCircle className="w-6 h-6 text-red-600 ml-2" />
+                      )}
+                    </div>
+                    <div className="text-sm space-y-1">
+                      <p className={answer.isCorrect ? 'text-green-700' : 'text-red-700'}>
+                        <strong>Your answer:</strong> {answer.selectedAnswer}
+                      </p>
+                      {!answer.isCorrect && (
+                        <p className="text-green-700">
+                          <strong>Correct answer:</strong> {answer.correctAnswer}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={resetQuiz}
+              className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 font-semibold"
+            >
+              Take Another Quiz
+            </button>
+            <button
+              onClick={onBack}
+              className="px-8 py-3 bg-gray-500 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 hover:bg-gray-600 font-semibold"
+            >
+              Back to Dashboard
+            </button>
+          </div>
         </div>
       </div>
     );
