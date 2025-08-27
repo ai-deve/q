@@ -53,7 +53,12 @@ export function QuizParticipation({ onBack, currentUser }: QuizParticipationProp
   };
 
   const handleNextQuestion = async () => {
-    if (selectedAnswer === null || !currentQuiz) return;
+    if (selectedAnswer === null || !currentQuiz) {
+      console.log('Cannot proceed: selectedAnswer or currentQuiz missing', { selectedAnswer, currentQuiz });
+      return;
+    }
+
+    console.log('Processing question:', currentQuestionIndex + 1, 'of', currentQuiz.questions.length);
 
     const currentQuestion = currentQuiz.questions[currentQuestionIndex];
     const isCorrect = selectedAnswer === ['A', 'B', 'C', 'D'].indexOf(currentQuestion.correctAnswer);
@@ -70,16 +75,30 @@ export function QuizParticipation({ onBack, currentUser }: QuizParticipationProp
 
     // Move to next question or complete quiz
     if (currentQuestionIndex < currentQuiz.questions.length - 1) {
+      console.log('Moving to next question');
       setCurrentQuestionIndex(currentQuestionIndex + 1);
       setSelectedAnswer(null);
     } else {
+      console.log('Quiz completed, submitting results...');
       // Submit quiz results
       await submitQuizResults(updatedAnswers);
     }
   };
 
   const submitQuizResults = async (answers: QuizAnswer[]) => {
-    if (!currentQuiz || !currentUser) return;
+    if (!currentQuiz || !currentUser) {
+      console.error('Missing quiz or user data:', { currentQuiz, currentUser });
+      return;
+    }
+
+    console.log('Submitting quiz results:', {
+      quizId: currentQuiz.id,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userEmail: currentUser.email,
+      answers: answers.length,
+      quizTitle: currentQuiz.title
+    });
 
     setLoading(true);
     try {
@@ -106,12 +125,15 @@ export function QuizParticipation({ onBack, currentUser }: QuizParticipationProp
         }),
       });
 
+      console.log('Response status:', response.status);
       const data = await response.json();
+      console.log('Response data:', data);
       
       if (data.success) {
         setQuizResult(data.result);
         setQuizCompleted(true);
       } else {
+        console.error('Submission failed:', data);
         setError('Failed to submit quiz results');
       }
     } catch (error) {
