@@ -21,6 +21,26 @@ export interface Quiz {
 }
 
 export interface QuizResult {
+  id?: string;
+  quizId: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  score: number;
+  totalQuestions: number;
+  percentage: number;
+  performanceLevel: 'poor' | 'good' | 'excellent';
+  answers: {
+    questionId: string;
+    selectedAnswer: string;
+    correctAnswer: string;
+    isCorrect: boolean;
+  }[];
+  completedAt: Date;
+  quizTitle: string;
+}
+
+export interface QuizAnswer {
   questionId: string;
   selectedAnswer: number;
   isCorrect: boolean;

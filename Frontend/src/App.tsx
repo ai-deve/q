@@ -90,6 +90,8 @@ function App() {
       quizzes={quizzes}
       onLogout={handleLogout}
       userName={authState.user?.name || ''}
+      userEmail={authState.user?.email || ''}
+      userId={authState.user?.id || ''}
     />
   );
 }

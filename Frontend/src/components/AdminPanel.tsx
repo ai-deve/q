@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Plus, Copy, BookOpen, Users, Code, LogOut } from 'lucide-react';
-import { Quiz } from '../types/quiz';
+import React, { useState, useEffect } from 'react';
+import { Plus, Copy, BookOpen, Users, Code, LogOut, BarChart3, Trophy, Target, TrendingUp } from 'lucide-react';
+import { Quiz, QuizResult } from '../types/quiz';
 
 interface AdminPanelProps {
   quizzes: Quiz[];
@@ -15,6 +15,9 @@ export function AdminPanel({ quizzes, onCreateQuiz, onLogout, userName }: AdminP
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('easy');
   const [isCreating, setIsCreating] = useState(false);
   const [copiedCode, setCopiedCode] = useState('');
+  const [quizResults, setQuizResults] = useState<QuizResult[]>([]);
+  const [selectedQuizId, setSelectedQuizId] = useState<string | null>(null);
+  const [showResults, setShowResults] = useState(false);
 
   const generateQuizCode = (): string => {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -78,6 +81,161 @@ export function AdminPanel({ quizzes, onCreateQuiz, onLogout, userName }: AdminP
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(''), 2000);
   };
+
+  const fetchQuizResults = async (quizId?: string) => {
+    try {
+      const url = quizId 
+        ? `http://localhost:3001/api/quiz/results?quizId=${quizId}`
+        : 'http://localhost:3001/api/quiz/results';
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.success) {
+        setQuizResults(data.results);
+        setSelectedQuizId(quizId || null);
+        setShowResults(true);
+      }
+    } catch (error) {
+      console.error('Error fetching quiz results:', error);
+    }
+  };
+
+  const getPerformanceColor = (level: string) => {
+    switch (level) {
+      case 'excellent': return 'text-green-600 bg-green-100';
+      case 'good': return 'text-blue-600 bg-blue-100';
+      case 'poor': return 'text-red-600 bg-red-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getPerformanceIcon = (level: string) => {
+    switch (level) {
+      case 'excellent': return <Trophy className="w-5 h-5" />;
+      case 'good': return <Target className="w-5 h-5" />;
+      case 'poor': return <TrendingUp className="w-5 h-5" />;
+      default: return <Target className="w-5 h-5" />;
+    }
+  };
+
+  if (showResults) {
+    const selectedQuiz = quizzes.find(q => q.id === selectedQuizId);
+    const averageScore = quizResults.length > 0 
+      ? Math.round(quizResults.reduce((sum, result) => sum + result.percentage, 0) / quizResults.length)
+      : 0;
+    
+    const performanceCounts = quizResults.reduce((counts, result) => {
+      counts[result.performanceLevel] = (counts[result.performanceLevel] || 0) + 1;
+      return counts;
+    }, {} as Record<string, number>);
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+        <div className="container mx-auto px-4 py-8">
+          {/* Header */}
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <h1 className="text-4xl font-bold text-gray-800 mb-2">Quiz Results</h1>
+              <p className="text-gray-600">
+                {selectedQuiz ? `Results for: ${selectedQuiz.title}` : 'All Quiz Results'}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowResults(false)}
+              className="px-6 py-3 bg-gray-500 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 hover:bg-gray-600"
+            >
+              Back to Dashboard
+            </button>
+          </div>
+
+          {/* Statistics */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+              <div className="flex items-center gap-3 mb-2">
+                <Users className="w-6 h-6 text-blue-600" />
+                <span className="text-gray-600">Total Participants</span>
+              </div>
+              <div className="text-3xl font-bold text-gray-800">{quizResults.length}</div>
+            </div>
+            
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+              <div className="flex items-center gap-3 mb-2">
+                <BarChart3 className="w-6 h-6 text-purple-600" />
+                <span className="text-gray-600">Average Score</span>
+              </div>
+              <div className="text-3xl font-bold text-gray-800">{averageScore}%</div>
+            </div>
+
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+              <div className="flex items-center gap-3 mb-2">
+                <Trophy className="w-6 h-6 text-green-600" />
+                <span className="text-gray-600">Excellent</span>
+              </div>
+              <div className="text-3xl font-bold text-gray-800">{performanceCounts.excellent || 0}</div>
+            </div>
+
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+              <div className="flex items-center gap-3 mb-2">
+                <Target className="w-6 h-6 text-blue-600" />
+                <span className="text-gray-600">Good</span>
+              </div>
+              <div className="text-3xl font-bold text-gray-800">{performanceCounts.good || 0}</div>
+            </div>
+          </div>
+
+          {/* Results List */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-white/20">
+            <h2 className="text-2xl font-semibold text-gray-800 mb-6">Student Results</h2>
+            
+            {quizResults.length === 0 ? (
+              <div className="text-center py-12">
+                <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 text-lg">No results yet</p>
+                <p className="text-gray-400">Results will appear here once students complete the quiz</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {quizResults.map((result) => (
+                  <div
+                    key={result.id}
+                    className="bg-white/60 rounded-xl p-6 border border-gray-100 hover:shadow-lg transition-all duration-300"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-1">{result.userName}</h3>
+                        <p className="text-gray-600 text-sm mb-2">{result.userEmail}</p>
+                        <p className="text-sm text-gray-500">
+                          Completed: {new Date(result.completedAt).toLocaleDateString()} at {new Date(result.completedAt).toLocaleTimeString()}
+                        </p>
+                      </div>
+                      
+                      <div className="flex items-center gap-4">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-gray-800">{result.score}/{result.totalQuestions}</div>
+                          <div className="text-sm text-gray-600">Correct</div>
+                        </div>
+                        
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-purple-600">{result.percentage}%</div>
+                          <div className="text-sm text-gray-600">Score</div>
+                        </div>
+                        
+                        <div className={`flex items-center gap-2 px-3 py-2 rounded-full ${getPerformanceColor(result.performanceLevel)}`}>
+                          {getPerformanceIcon(result.performanceLevel)}
+                          <span className="font-semibold capitalize">{result.performanceLevel}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
@@ -162,7 +320,16 @@ export function AdminPanel({ quizzes, onCreateQuiz, onLogout, userName }: AdminP
 
         {/* Created Quizzes */}
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-white/20">
-          <h2 className="text-2xl font-semibold text-gray-800 mb-6">Created Quizzes</h2>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-semibold text-gray-800">Created Quizzes</h2>
+            <button
+              onClick={() => fetchQuizResults()}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
+            >
+              <BarChart3 className="w-5 h-5" />
+              View All Results
+            </button>
+          </div>
           
           {quizzes.length === 0 ? (
             <div className="text-center py-12">
@@ -205,6 +372,14 @@ export function AdminPanel({ quizzes, onCreateQuiz, onLogout, userName }: AdminP
                         }`}
                       >
                         <Copy className="w-5 h-5" />
+                      </button>
+
+                      <button
+                        onClick={() => fetchQuizResults(quiz.id)}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-all duration-200"
+                      >
+                        <BarChart3 className="w-4 h-4" />
+                        Results
                       </button>
                     </div>
                   </div>
